@@ -2751,6 +2751,33 @@ class MasteryProfileTool(BaseTool):
         )
 
 
+_REVISE_EMPTY_PLACEHOLDER_KEYS = ("module_order", "rewrite", "add", "remove", "modules")
+
+
+def _drop_inactive_revise_placeholders(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Treat top-level ``[]`` / blank ``module_id`` / non-commit ``preview_id=0`` as omitted.
+
+    Some providers fill every optional argument with a typed zero value. Nested
+    arrays such as ``prerequisite_ids: []`` are meaningful and are not touched.
+    """
+    cleaned = dict(kwargs)
+    for key in _REVISE_EMPTY_PLACEHOLDER_KEYS:
+        if isinstance(cleaned.get(key), list) and not cleaned[key]:
+            del cleaned[key]
+    module_id = cleaned.get("module_id")
+    if isinstance(module_id, str) and not module_id.strip():
+        del cleaned["module_id"]
+    preview_id = cleaned.get("preview_id")
+    if (
+        cleaned.get("action") != "commit"
+        and isinstance(preview_id, int)
+        and not isinstance(preview_id, bool)
+        and preview_id == 0
+    ):
+        del cleaned["preview_id"]
+    return cleaned
+
+
 class MasteryReviseTool(BaseTool):
     """Reshape one module's knowledge points without moving its goalposts.
 
@@ -2931,6 +2958,7 @@ class MasteryReviseTool(BaseTool):
         )
 
     async def execute(self, **kwargs: Any) -> ToolResult:
+        kwargs = _drop_inactive_revise_placeholders(kwargs)
         refusal = _wrong_mode_result("mastery_revise", kwargs)
         if refusal is not None:
             return refusal

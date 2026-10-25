@@ -392,7 +392,6 @@ async def test_reorder_only_preview_commit_preserves_every_objective_and_pending
 @pytest.mark.parametrize(
     "order",
     [
-        [],
         ["m0", "m1"],
         ["m0", "m1", "m1"],
         ["m0", "m1", "foreign"],
@@ -642,3 +641,46 @@ def test_group_child_revision_is_previewed_without_retiring_live_questions(syste
     service.commit_module_revision("path", result["preview_id"], session_id="session")
     assert store.get_active_interaction("path") is None
     assert store.load("path").pending_question is None
+
+
+@pytest.mark.asyncio
+async def test_inactive_placeholder_arguments_are_treated_as_omitted(system, monkeypatch):
+    from deeptutor.capabilities.mastery import tools
+
+    store, service = system
+    monkeypatch.setattr(tools, "_new_service", lambda: service)
+    tool = MasteryReviseTool()
+    args = {
+        "_mastery_path_id": "path",
+        "_session_id": "session",
+        "_mastery_session_mode": "outline",
+    }
+    placeholders = {"module_id": "", "module_order": [], "rewrite": [], "add": [], "remove": []}
+    preview = await tool.execute(
+        **args, action="preview", preview_id=0, modules=revisions(), **placeholders
+    )
+    assert preview.success, preview.content
+    draft = json.loads(preview.content)
+    committed = await tool.execute(
+        **args, action="commit", preview_id=draft["preview_id"], **placeholders
+    )
+    assert committed.success, committed.content
+    assert store.load("path").modules[0].knowledge_points[0].name == "Revised objective 0"
+
+
+@pytest.mark.asyncio
+async def test_commit_still_rejects_zero_preview_id_and_real_edits(system, monkeypatch):
+    from deeptutor.capabilities.mastery import tools
+
+    _, service = system
+    monkeypatch.setattr(tools, "_new_service", lambda: service)
+    tool = MasteryReviseTool()
+    args = {
+        "_mastery_path_id": "path",
+        "_session_id": "session",
+        "_mastery_session_mode": "outline",
+    }
+    zero = await tool.execute(**args, action="commit", preview_id=0)
+    assert not zero.success
+    conflict = await tool.execute(**args, action="commit", preview_id=1, modules=revisions())
+    assert not conflict.success and "omit all revision edits" in conflict.content
