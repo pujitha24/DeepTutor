@@ -95,6 +95,15 @@ it("recognizes manual scrollbar movement without requiring a wheel gesture", () 
   expect(following.current).toBe(false);
 });
 
+it("releases follow on an upward scroll that lands in the same frame as content growth", () => {
+  render(<Harness />); flushLayout();
+  // Streaming grew the document before the scroll event for the user's drag.
+  height = 1100; top = 400; fireEvent.scroll(screen.getByTestId("scroll"));
+  flushLayout();
+  expect(top).toBe(400);
+  expect(following.current).toBe(false);
+});
+
 it("respects even a small deliberate upward scroll near the live end", () => {
   render(<Harness />); flushLayout();
   fireEvent.wheel(screen.getByTestId("scroll"), { deltaY: -20 });

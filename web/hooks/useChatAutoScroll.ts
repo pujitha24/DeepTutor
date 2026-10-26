@@ -59,6 +59,13 @@ export function useChatAutoScroll({
         shouldAutoScrollRef.current = true;
       }
       else if (container.scrollTop < previous.top - 4) shouldAutoScrollRef.current = false;
+    } else if (container.scrollHeight >= previous.height &&
+      container.clientHeight === previous.viewport &&
+      container.scrollTop < previous.top - 4) {
+      // Streaming grows the document between scroll events, so a scrollbar
+      // drag upward rarely sees an unchanged layout. Without shrinkage the
+      // browser did not clamp, so a lower scrollTop is the reader moving.
+      shouldAutoScrollRef.current = false;
     }
     rememberPosition(container);
   }, [rememberPosition]);
